@@ -11,7 +11,7 @@ from typing_extensions import Literal
 from graphql import GraphQLResolveInfo
 
 import strawberry
-from strawberry.arguments import UNSET, is_unset
+from strawberry.arguments import UNSET
 from strawberry.experimental.pydantic.conversion import (
     convert_pydantic_model_to_strawberry_class,
 )
@@ -30,17 +30,6 @@ from strawberry.types.type_resolver import _get_fields
 from strawberry.types.types import TypeDefinition
 
 from .exceptions import MissingFieldsListError, UnregisteredTypeException
-
-
-class PydanticInputMetadataDict(Dict[str, Any]):
-    """
-    This is a compatibility workaround allowing us to leverage
-    GraphQL's spec ability to distinguish if a field was provided at
-    model creation with Pydantic's exclude_unset setting.
-    """
-
-    def __init__(self, fields: List[Tuple[str, Any]]) -> None:
-        super().__init__(field for field in fields if not is_unset(field[1]))
 
 
 def replace_pydantic_types(type_: Any):
@@ -137,10 +126,7 @@ def type(
                     graphql_name=field.alias if field.has_alias else None,
                     # always unset because we use default_factory instead
                     default=UNSET,
-                    default_factory=get_default_factory_for_field(
-                        field,
-                        with_input_metadata,
-                    ),
+                    default_factory=get_default_factory_for_field(field),
                     type_annotation=get_type_for_field(field),
                     description=field.field_info.description,
                 ),
@@ -148,6 +134,12 @@ def type(
             for field_name, field in model_fields.items()
             if field_name in fields_set
         ]
+
+        fields_maybe_unset = set(
+            field_name
+            for field_name, field in model_fields.items()
+            if field_name in fields_set and not field.required
+        )
 
         wrapped = _wrap_dataclass(cls)
         extra_fields = cast(List[dataclasses.Field], _get_fields(wrapped))
@@ -198,12 +190,15 @@ def type(
                 cls=cls, model_instance=instance, extra=extra
             )
 
+        def get_pydantic_input_meta(fields: List[Tuple[str, Any]]) -> Dict[str, Any]:
+            return dict(field for field in fields if field[0] not in fields_maybe_unset)
+
         def to_pydantic(self) -> Any:
-            instance_kwargs = dataclasses.asdict(
+            instance_kwargs = dataclasses.asdict(  # type: ignore
                 self,
-                dict_factory=(
-                    dict if not with_input_metadata else PydanticInputMetadataDict
-                ),
+                dict_factory=dict
+                if not with_input_metadata
+                else get_pydantic_input_meta,
             )
 
             return model(**instance_kwargs)

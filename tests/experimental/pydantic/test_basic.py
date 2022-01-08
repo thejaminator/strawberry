@@ -75,7 +75,7 @@ def test_basic_type_with_input_metadata():
         frenemy: strawberry.auto
 
     user_input_1 = UserType1(frenemy="frenemy_value")
-    assert is_unset(user_input_1.friend)
+    assert user_input_1.friend == "friend_value"
     assert user_input_1.to_pydantic().friend == "friend_value"
     assert user_input_1.to_pydantic().dict() == {
         "friend": "friend_value",
@@ -95,7 +95,6 @@ def test_basic_type_with_input_metadata():
         frenemy: strawberry.auto
 
     user_input_2 = UserType2(frenemy="frenemy_value")
-    assert is_unset(user_input_2.friend)
     assert user_input_2.to_pydantic().friend == "friend_value"
     assert user_input_2.to_pydantic().dict() == {
         "friend": "friend_value",
@@ -103,6 +102,18 @@ def test_basic_type_with_input_metadata():
     }
     assert user_input_2.to_pydantic().dict(exclude_unset=True) == {
         "frenemy": "frenemy_value"
+    }
+
+    # test when we pass the default value
+    user_input_default = UserType2(frenemy="frenemy_value", friend="not_default_friend")
+    assert user_input_default.to_pydantic().friend == "not_default_friend"
+    assert user_input_2.to_pydantic().dict() == {
+        "friend": "not_default_friend",
+        "frenemy": "frenemy_value",
+    }
+    assert user_input_2.to_pydantic().dict(exclude_unset=True) == {
+        "friend": "not_default_friend",
+        "frenemy": "frenemy_value",
     }
 
     # explicit tests for None
@@ -118,7 +129,6 @@ def test_basic_type_with_input_metadata():
         frenemy: strawberry.auto
 
     user_input_3 = UserType3(frenemy="frenemy_value")
-    assert is_unset(user_input_3.friend)
     assert is_unset(user_input_3.enemy)
     assert user_input_3.to_pydantic().friend is None
     assert user_input_3.to_pydantic().dict() == {
